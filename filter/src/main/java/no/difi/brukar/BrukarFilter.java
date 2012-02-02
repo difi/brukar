@@ -24,10 +24,12 @@ public class BrukarFilter implements Filter {
     private HttpServletResponse res;
     private HttpSession session;
     
+    @Override
     public void init(FilterConfig filterConfig) throws ServletException {
         config = filterConfig;
     }
     
+    @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
         if (request instanceof HttpServletRequest) {
             req = (HttpServletRequest) request;
@@ -36,10 +38,16 @@ public class BrukarFilter implements Filter {
             
             if (session.getAttribute("brukar") == null) {
                 BrukarApi brukarApi = new BrukarApi(config.getInitParameter("host"));
-                service = new ServiceBuilder().provider(brukarApi).apiKey(config.getInitParameter("token")).apiSecret(config.getInitParameter("secret")).callback(req.getRequestURL().toString()).build();
+                
+                String _url = ((HttpServletRequest) request).getRequestURL().toString();
+                String _query = ((HttpServletRequest) request).getQueryString();
+            
+                String url = _url + (_query == null ? "" : "?" + _query);
+                
+                service = new ServiceBuilder().provider(brukarApi).apiKey(config.getInitParameter("token")).apiSecret(config.getInitParameter("secret")).callback(url).build();
                 
                 if (req.getParameter("oauth_token") != null) {
-                    loadUser();
+                    loadUser(url);
                 } else {
                     requestLogin();
                 }
@@ -56,21 +64,22 @@ public class BrukarFilter implements Filter {
         res.sendRedirect(service.getAuthorizationUrl(requestToken));
     }
     
-    protected void loadUser() throws IOException {
+    protected void loadUser(String url) throws IOException {
         Token requestToken = (Token) session.getAttribute("token");
         if (requestToken != null) {
             session.removeAttribute("token");
             
             Token accessToken = service.getAccessToken(requestToken, new Verifier("dummy"));
             session.setAttribute("brukar", accessToken);
-            
-            String url = req.getRequestURI();
-            res.sendRedirect(url);
+
+            res.sendRedirect(url.substring(0, url.indexOf("oauth_token=") - 1));
         } else {
             res.getWriter().print("No access.");
         }
     }
     
+    @Override
     public void destroy() {
+
     }
 }
