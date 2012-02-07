@@ -49,7 +49,7 @@ public class BrukarFilter implements Filter {
                 if (req.getParameter("oauth_token") != null) {
                     loadUser(url);
                 } else {
-                    requestLogin();
+                    requestLogin(false);
                 }
             } else {
                 chain.doFilter(request, response);
@@ -57,9 +57,10 @@ public class BrukarFilter implements Filter {
         }
     }
     
-    protected void requestLogin() throws IOException {
+    protected void requestLogin(boolean retry) throws IOException {
         Token requestToken = service.getRequestToken();
         session.setAttribute("token", requestToken);
+        session.setAttribute("brukar_retry", retry);
         
         res.sendRedirect(service.getAuthorizationUrl(requestToken));
     }
@@ -68,13 +69,20 @@ public class BrukarFilter implements Filter {
         Token requestToken = (Token) session.getAttribute("token");
         if (requestToken != null) {
             session.removeAttribute("token");
+            session.removeAttribute("brukar_retry");
             
             Token accessToken = service.getAccessToken(requestToken, new Verifier("dummy"));
             session.setAttribute("brukar", accessToken);
 
             res.sendRedirect(url.substring(0, url.indexOf("oauth_token=") - 1));
         } else {
-            res.getWriter().print("No access.");
+            Boolean retry =  (Boolean) session.getAttribute("brukar_retry");
+            if (retry == null || retry == false) {
+                requestLogin(true);
+            } else
+            {
+                res.getWriter().print("No access.");
+            }
         }
     }
     
